@@ -9,6 +9,7 @@ import Sidebar from './components/Sidebar';
 import ThemeToggle from './components/ThemeToggle';
 import './App.css';
 import logo from '../public/branch-logo.png'; 
+import { apiFetch } from './api';
 
 function App() {
   const [agent, setAgent] = useState(null);
@@ -24,7 +25,7 @@ function App() {
   const handleLogin = async (agentName) => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/agents/login', {
+      const response = await apiFetch('/api/agents/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -51,7 +52,7 @@ function App() {
   const handleLogout = async () => {
     try {
       if (agent) {
-        await fetch('/api/agents/logout', {
+        await apiFetch('/api/agents/logout', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
-
+import { apiFetch } from '../api';
 const ConversationView = ({ agent }) => {
   const { customerId } = useParams();
   const [messages, setMessages] = useState([]);
@@ -18,7 +18,7 @@ const ConversationView = ({ agent }) => {
 
   const fetchMessages = async () => {
     try {
-      const response = await fetch(`/api/messages/${customerId}`);
+      const response = await apiFetch(`/api/messages/${customerId}`);
       if (response.ok) {
         const data = await response.json();
         setMessages(data);
@@ -80,7 +80,7 @@ const ConversationView = ({ agent }) => {
         return;
       }
 
-      const response = await fetch(`/api/messages/${latestCustomerMessage.id}/respond`, {
+      const response = await apiFetch(`/api/messages/${latestCustomerMessage.id}/respond`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

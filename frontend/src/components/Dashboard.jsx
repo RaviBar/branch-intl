@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
 import { useFilters } from '../contexts/FilterContext'; 
-
+import { apiFetch } from '../api';
 const Dashboard = ({ agent }) => {
   const [conversations, setConversations] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -14,7 +14,7 @@ const Dashboard = ({ agent }) => {
   const fetchConversations = async () => {
     const isFirstLoad = isLoading;
     try {
-      const response = await fetch('/api/messages');
+      const response = await apiFetch('/api/messages');
       if (!response.ok) throw new Error('Failed to fetch conversations');
       const data = await response.json();
       setConversations(Array.isArray(data) ? data : []);
