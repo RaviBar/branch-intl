@@ -1,6 +1,6 @@
 const sqlite3 = require('sqlite3').verbose();
 const { Pool } = require('pg'); 
-const path = path = require('path');
+const path = require('path');
 const fs = require('fs');
 
 class Database {
@@ -19,14 +19,21 @@ class Database {
   }
 
   initPostgreSQL() {
-    this.connection = new Pool({
-      host: process.env.DB_HOST,
-      port: process.env.DB_PORT,
-      database: process.env.DB_NAME,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-    });
+    const connectionConfig = {};
+        if (process.env.DATABASE_URL) {
+      connectionConfig.connectionString = process.env.DATABASE_URL;
+      if (process.env.NODE_ENV === 'production') {
+        connectionConfig.ssl = { rejectUnauthorized: false };
+      }
+    } else {
+      connectionConfig.host = process.env.DB_HOST;
+      connectionConfig.port = process.env.DB_PORT;
+      connectionConfig.database = process.env.DB_NAME;
+      connectionConfig.user = process.env.DB_USER;
+      connectionConfig.password = process.env.DB_PASSWORD;
+    }
+
+    this.connection = new Pool(connectionConfig);
 
     this.connection.connect((err, client, release) => {
       if (err) {
