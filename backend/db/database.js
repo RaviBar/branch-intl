@@ -121,7 +121,66 @@ class Database {
       }
     });
   }
+sqlToPg(sql) {
+    let i = 0;
+    // This regex replaces ? but not ?? (jsonb operators)
+    return sql.replace(/(?<!\?)\?(?!\?)/g, () => `$${++i}`);
+  }
 
+  query(sql, params = []) {
+    if (this.type === 'postgres') {
+      const pgSql = this.sqlToPg(sql);
+      return this.connection.query(pgSql, params).then(res => res.rows);
+    } else {
+      // Original SQLite code
+      return new Promise((resolve, reject) => {
+        this.connection.all(sql, params, (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        });
+      });
+    }
+  }
+
+  get(sql, params = []) {
+    if (this.type === 'postgres') {
+      const pgSql = this.sqlToPg(sql);
+      return this.connection.query(pgSql, params).then(res => res.rows[0]);
+    } else {
+      // Original SQLite code
+      return new Promise((resolve, reject) => {
+        this.connection.get(sql, params, (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+    }
+  }
+
+  run(sql, params = []) {
+    if (this.type === 'postgres') {
+      let pgSql = this.sqlToPg(sql);
+
+      // Add "RETURNING id" to INSERTs to get the new ID
+      if (pgSql.trim().toUpperCase().startsWith('INSERT') && !pgSql.includes('RETURNING')) {
+        pgSql = pgSql + ' RETURNING id';
+      }
+      
+      return this.connection.query(pgSql, params)
+        .then(res => ({
+          lastID: res.rows[0] ? res.rows[0].id : null,
+          changes: res.rowCount,
+        }));
+    } else {
+      // Original SQLite code
+      return new Promise((resolve, reject) => {
+        this.connection.run(sql, params, function(err) {
+          if (err) reject(err);
+          else resolve({ lastID: this.lastID, changes: this.changes });
+        });
+      });
+    }
+  }
   createSQLiteTables() {
     const schema = `
       CREATE TABLE IF NOT EXISTS customers (
