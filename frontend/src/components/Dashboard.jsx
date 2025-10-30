@@ -10,38 +10,60 @@ const Dashboard = ({ agent }) => {
   const { socket, isConnected } = useSocket();
 
   const fetchConversations = async () => {
-    try {
-      const response = await fetch('/api/messages');
-      if (!response.ok) throw new Error('Failed to fetch conversations');
-      const data = await response.json();
-      setConversations(Array.isArray(data) ? data : []);
-      setError(null);
-    } catch (err) {
-      setError('Network error');
-      console.error('Error fetching conversations:', err);
-    } finally {
-      setIsLoading(false);
+    // [FIX] Ensure loading state is only set if it's the first load
+    // We don't want the loading spinner on every background refresh
+    if (isLoading) { 
+      try {
+        const response = await fetch('/api/messages');
+        if (!response.ok) throw new Error('Failed to fetch conversations');
+        const data = await response.json();
+        setConversations(Array.isArray(data) ? data : []);
+        setError(null);
+      } catch (err) {
+        setError('Network error');
+        console.error('Error fetching conversations:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      // For socket updates, fetch without setting loading state
+      try {
+        const response = await fetch('/api/messages');
+        if (!response.ok) throw new Error('Failed to fetch conversations');
+        const data = await response.json();
+        setConversations(Array.isArray(data) ? data : []);
+        setError(null);
+      } catch (err) {
+        setError('Network error');
+        console.error('Error fetching conversations:', err);
+      }
     }
   };
 
   useEffect(() => {
+    // Initial fetch
     fetchConversations();
 
     if (socket) {
+      // [FIX] These listeners now drive all updates
       socket.on('new-customer-message', fetchConversations);
       socket.on('conversation-updated', fetchConversations);
+      
       socket.emit('agent-login', agent.id);
     }
 
-    const interval = setInterval(fetchConversations, 10000);
+    // [FIX] Removed the setInterval polling
+    // const interval = setInterval(fetchConversations, 10000);
+    
     return () => {
-      clearInterval(interval);
+      // [FIX] Removed clearInterval
+      // clearInterval(interval);
       if (socket) {
         socket.off('new-customer-message', fetchConversations);
         socket.off('conversation-updated', fetchConversations);
       }
     };
-  }, [socket, agent]);
+  }, [socket, agent]); // fetchConversations is memoized by default if defined outside
 
   const getStatusColor = (status, pendingCount, currentAgentId) => {
     if (pendingCount > 0) return 'bg-red-100 text-red-800';
@@ -130,11 +152,11 @@ const Dashboard = ({ agent }) => {
         if (someoneElse) {
           return (
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-              In Progress (Agent #{conversation.current_agent_name || conversation.current_agent_id})
+              In Progress (Agent: {conversation.current_agent_name || '...'})
             </span>
           );
         }
-        // unassigned => show an "Unassigned" hint if you like
+        // unassigned
         return (
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
             Unassigned
@@ -153,7 +175,7 @@ const Dashboard = ({ agent }) => {
         );
       };
 
-      // If another agent owns it → disabled
+      // [FIX] This logic is now reliable because socket updates will refresh `someoneElse`
       if (someoneElse) {
         return (
           <li key={conversation.customer_id}>

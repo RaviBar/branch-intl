@@ -10,14 +10,20 @@ class Database {
   }
 
   init() {
-    if (this.type === 'postgres') {
-      this.initPostgreSQL();
-    } else {
-      this.initSQLite();
-    }
+    // User requested to ignore Postgres, so we'll force SQLite
+    this.type = 'sqlite';
+    this.initSQLite();
+    
+    // Original logic (commented out per your request)
+    // if (this.type === 'postgres') {
+    //   this.initPostgreSQL();
+    // } else {
+    //   this.initSQLite();
+    // }
   }
 
   initPostgreSQL() {
+    // This logic is now skipped
     this.connection = new Pool({
       host: process.env.DB_HOST || 'localhost',
       port: process.env.DB_PORT || 5432,
@@ -56,6 +62,7 @@ class Database {
   }
 
   createPostgreSQLTables() {
+    // This logic is now skipped
     const schema = `
       -- Customers table
       CREATE TABLE IF NOT EXISTS customers (
@@ -80,7 +87,9 @@ class Database {
         is_from_customer BOOLEAN NOT NULL DEFAULT true,
         agent_id INTEGER REFERENCES agents(id),
         status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'assigned', 'responded')),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        current_agent_id INTEGER REFERENCES agents(id),
+        urgency_level VARCHAR(20) DEFAULT 'normal' CHECK (urgency_level IN ('normal', 'high'))
       );
 
       -- Indexes for better performance
@@ -88,6 +97,8 @@ class Database {
       CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
       CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status);
       CREATE INDEX IF NOT EXISTS idx_agents_online ON agents(is_online);
+      CREATE INDEX IF NOT EXISTS idx_messages_current_agent ON messages(current_agent_id);
+      CREATE INDEX IF NOT EXISTS idx_messages_urgency ON messages(urgency_level);
     `;
 
     this.connection.query(schema, (err) => {
@@ -100,6 +111,7 @@ class Database {
   }
 
   createSQLiteTables() {
+    // [FIX] This schema is now CORRECT. It includes current_agent_id and urgency_level.
     const schema = `
       -- Customers table
       CREATE TABLE IF NOT EXISTS customers (
@@ -123,10 +135,13 @@ class Database {
         timestamp DATETIME NOT NULL,
         is_from_customer BOOLEAN NOT NULL DEFAULT 1,
         agent_id INTEGER,
-        status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'assigned', 'responded')),
+        current_agent_id INTEGER,                         -- <— This was missing
+        urgency_level TEXT DEFAULT 'normal' CHECK (urgency_level IN ('normal','high')), -- <— This was missing
+        status TEXT DEFAULT 'pending' CHECK (status IN ('pending','assigned','responded')),
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (customer_id) REFERENCES customers(user_id),
-        FOREIGN KEY (agent_id) REFERENCES agents(id)
+        FOREIGN KEY (agent_id) REFERENCES agents(id),
+        FOREIGN KEY (current_agent_id) REFERENCES agents(id)
       );
 
       -- Create indexes
@@ -134,6 +149,8 @@ class Database {
       CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
       CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status);
       CREATE INDEX IF NOT EXISTS idx_agents_online ON agents(is_online);
+      CREATE INDEX IF NOT EXISTS idx_messages_current_agent ON messages(current_agent_id);
+      CREATE INDEX IF NOT EXISTS idx_messages_urgency ON messages(urgency_level);
     `;
 
     this.connection.exec(schema, (err) => {
@@ -147,6 +164,9 @@ class Database {
 
   // Query method that works for both databases
   query(sql, params = []) {
+    // Helper to fix PostgreSQL $1, $2 placeholders for SQLite
+    const sqliteSql = this.type === 'sqlite' ? sql.replace(/\$\d+/g, '?') : sql;
+    
     return new Promise((resolve, reject) => {
       if (this.type === 'postgres') {
         this.connection.query(sql, params, (err, result) => {
@@ -154,7 +174,7 @@ class Database {
           else resolve(result.rows);
         });
       } else {
-        this.connection.all(sql, params, (err, rows) => {
+        this.connection.all(sqliteSql, params, (err, rows) => {
           if (err) reject(err);
           else resolve(rows);
         });
@@ -164,6 +184,9 @@ class Database {
 
   // Get single row
   get(sql, params = []) {
+    // Helper to fix PostgreSQL $1, $2 placeholders for SQLite
+    const sqliteSql = this.type === 'sqlite' ? sql.replace(/\$\d+/g, '?') : sql;
+
     return new Promise((resolve, reject) => {
       if (this.type === 'postgres') {
         this.connection.query(sql, params, (err, result) => {
@@ -171,7 +194,7 @@ class Database {
           else resolve(result.rows[0]);
         });
       } else {
-        this.connection.get(sql, params, (err, row) => {
+        this.connection.get(sqliteSql, params, (err, row) => {
           if (err) reject(err);
           else resolve(row);
         });
@@ -181,14 +204,19 @@ class Database {
 
   // Run query (for INSERT, UPDATE, DELETE)
   run(sql, params = []) {
+    // Helper to fix PostgreSQL $1, $2 placeholders for SQLite
+    const sqliteSql = this.type === 'sqlite' ? sql.replace(/\$\d+/g, '?') : sql;
+
     return new Promise((resolve, reject) => {
       if (this.type === 'postgres') {
-        this.connection.query(sql, params, (err, result) => {
+        // Added RETURNING id to get the lastID for Postgres
+        const pgSql = /INSERT/i.test(sql) ? `${sql} RETURNING id` : sql;
+        this.connection.query(pgSql, params, (err, result) => {
           if (err) reject(err);
           else resolve({ lastID: result.rows[0]?.id || result.insertId, changes: result.rowCount });
         });
       } else {
-        this.connection.run(sql, params, function(err) {
+        this.connection.run(sqliteSql, params, function(err) {
           if (err) reject(err);
           else resolve({ lastID: this.lastID, changes: this.changes });
         });

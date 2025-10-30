@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
 
@@ -10,6 +10,11 @@ const ConversationView = ({ agent }) => {
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState(null);
   const { socket, isConnected } = useSocket();
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   const fetchMessages = async () => {
     try {
@@ -32,31 +37,41 @@ const ConversationView = ({ agent }) => {
   useEffect(() => {
     fetchMessages();
     
-    // Set up WebSocket listeners
     if (socket) {
-      // Join conversation room
       socket.emit('join-conversation', customerId);
       
-      // Listen for new messages in this conversation
-      socket.on('new-message', (message) => {
+      // [FIX] This listener now correctly updates the state
+      const handleNewMessage = (message) => {
         if (message.customer_id === parseInt(customerId)) {
           console.log('New message received:', message);
           setMessages(prev => [...prev, message]);
         }
-      });
+      };
+      
+      socket.on('new-message', handleNewMessage);
+      
+      // The dashboard listener is also useful here to catch assignments
+      socket.on('conversation-updated', fetchMessages);
     }
     
-    // Fallback polling every 5 seconds (less frequent since we have WebSockets)
-    const interval = setInterval(fetchMessages, 5000);
+    // [FIX] Removed the setInterval polling
+    // const interval = setInterval(fetchMessages, 5000);
     
     return () => {
-      clearInterval(interval);
+      // [FIX] Removed clearInterval
+      // clearInterval(interval);
       if (socket) {
         socket.emit('leave-conversation', customerId);
         socket.off('new-message');
+        socket.off('conversation-updated', fetchMessages);
       }
     };
   }, [socket, customerId]);
+
+  // Effect to scroll to bottom when messages change
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -64,13 +79,13 @@ const ConversationView = ({ agent }) => {
 
     setIsSending(true);
     try {
-      // Find the latest customer message to respond to
       const latestCustomerMessage = messages
         .filter(msg => msg.is_from_customer)
         .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
 
       if (!latestCustomerMessage) {
         alert('No customer message found to respond to');
+        setIsSending(false);
         return;
       }
 
@@ -80,6 +95,7 @@ const ConversationView = ({ agent }) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          // [FIX] Use messageBody to match backend
           messageBody: newMessage.trim(),
           agentId: agent.id,
         }),
@@ -87,11 +103,15 @@ const ConversationView = ({ agent }) => {
 
       if (response.ok) {
         setNewMessage('');
-        // Refresh messages
-        await fetchMessages();
+        // [FIX] No longer need to manually fetch.
+        // The socket 'new-message' event will update the UI.
+        // await fetchMessages(); 
       } else {
-        const error = await response.json();
-        alert(`Failed to send message: ${error.error}`);
+        const errorData = await response.json();
+        alert(`Failed to send message: ${errorData.error}`);
+        // [FIX] If it failed (e.g., 409 conflict), refresh state
+        // to show who took the ticket.
+        await fetchMessages();
       }
     } catch (err) {
       console.error('Error sending message:', err);
@@ -116,16 +136,24 @@ const ConversationView = ({ agent }) => {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="mb-6">
-        <Link
-          to="/dashboard"
-          className="text-indigo-600 hover:text-indigo-500 text-sm font-medium"
-        >
-          ← Back to Dashboard
-        </Link>
-        <h2 className="mt-2 text-2xl font-bold text-gray-900">
-          Conversation with Customer #{customerId}
-        </h2>
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <Link
+            to="/dashboard"
+            className="text-indigo-600 hover:text-indigo-500 text-sm font-medium"
+          >
+            ← Back to Dashboard
+          </Link>
+          <h2 className="mt-2 text-2xl font-bold text-gray-900">
+            Conversation with Customer #{customerId}
+          </h2>
+        </div>
+        <div className="flex items-center space-x-2">
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+            <span className="text-sm text-gray-600">
+              {isConnected ? 'Connected' : 'Disconnected'}
+            </span>
+        </div>
       </div>
 
       {error && (
@@ -139,7 +167,7 @@ const ConversationView = ({ agent }) => {
           <h3 className="text-lg font-medium text-gray-900">Messages</h3>
         </div>
         
-        <div className="px-6 py-4 max-h-96 overflow-y-auto">
+        <div className="px-6 py-4 h-96 overflow-y-auto">
           {messages.length === 0 ? (
             <p className="text-gray-500 text-center py-8">No messages found</p>
           ) : (
@@ -156,7 +184,7 @@ const ConversationView = ({ agent }) => {
                         : 'bg-indigo-600 text-white'
                     }`}
                   >
-                    <p className="text-sm">{message.message_body}</p>
+                    <p className="text-sm whitespace-pre-wrap">{message.message_body}</p>
                     <p
                       className={`text-xs mt-1 ${
                         message.is_from_customer ? 'text-gray-500' : 'text-indigo-200'
@@ -170,6 +198,7 @@ const ConversationView = ({ agent }) => {
                   </div>
                 </div>
               ))}
+              <div ref={messagesEndRef} />
             </div>
           )}
         </div>
@@ -199,4 +228,3 @@ const ConversationView = ({ agent }) => {
 };
 
 export default ConversationView;
-

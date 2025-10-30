@@ -4,7 +4,10 @@ const path = require('path');
 const dbPath = path.join(__dirname, 'cs_messaging.db');
 const db = new sqlite3.Database(dbPath);
 
-const urgentKeywords = ['loan approval', 'disbursed', 'urgent', 'help', 'immediate'];
+const urgentKeywords = ['loan', 'approval', 'disbursed', 'urgent', 'help', 
+  'immediate', 'rejected', 'denied', 'payment', 
+  'batch number', 'validate', 'review', 'crb', 
+  'clearance', 'pay'];
 
 db.serialize(() => {
   db.run(`PRAGMA busy_timeout=5000;`);
