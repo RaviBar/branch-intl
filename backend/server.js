@@ -38,28 +38,68 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Something went wrong!' });
 });
 
+// [NEW] Define this helper function here
+const handleSimulatedMessage = async (data, callback) => {
+  try {
+    const { customerId, messageBody } = data;
+    if (!customerId || !messageBody) {
+      return callback({ success: false, error: 'Customer ID and message body are required' });
+    }
+
+    await db.run('INSERT OR IGNORE INTO customers (user_id) VALUES (?)', [customerId]);
+
+    const lower = messageBody.toLowerCase();
+    const urgentKeywords = [
+      'loan', 'approval', 'disbursed', 'urgent', 'help', 
+      'immediate', 'rejected', 'denied', 'payment', 
+      'batch number', 'validate', 'review', 'crb', 
+      'clearance', 'pay'
+    ];
+    const isUrgent = urgentKeywords.some(k => lower.includes(k));
+    const urgency = isUrgent ? 'high' : 'normal';
+
+    const r = await db.run(
+      `INSERT INTO messages (customer_id, message_body, timestamp, is_from_customer, status, urgency_level, current_agent_id)
+       VALUES (?, ?, ?, 1, 'pending', ?, NULL)`,
+      [customerId, messageBody, new Date().toISOString(), urgency]
+    );
+    
+    const newMessage = await db.get('SELECT * FROM messages WHERE id = ?', [r.lastID]);
+    
+    const conversationRoom = `conversation-${customerId}`;
+    io.to(conversationRoom).emit('new-message', newMessage);
+    io.emit('new-customer-message', { id: r.lastID, customer_id: customerId });
+    
+    callback({ success: true, messageId: r.lastID });
+  } catch (e) {
+    console.error('Error in simulation socket:', e);
+    callback({ success: false, error: 'Failed to send message' });
+  }
+};
+
+
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
   
-  // Join agent room when agent logs in
   socket.on('agent-login', (agentId) => {
     socket.join(`agent-${agentId}`);
     console.log(`Agent ${agentId} joined room`);
   });
   
-  // Join conversation room to listen for updates
   socket.on('join-conversation', (customerId) => {
     socket.join(`conversation-${customerId}`);
     console.log(`Client joined conversation ${customerId}`);
   });
   
-  // Leave conversation room
   socket.on('leave-conversation', (customerId) => {
     socket.leave(`conversation-${customerId}`);
     console.log(`Client left conversation ${customerId}`);
   });
   
+  // [NEW] Handle simulator message via socket
+  socket.on('simulate-message', handleSimulatedMessage);
+
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
   });

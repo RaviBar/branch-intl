@@ -32,7 +32,6 @@ const MessageSimulator = () => {
         setSuccess(true);
         setCustomerId('');
         setMessageBody('');
-        // Clear success message after 3 seconds
         setTimeout(() => setSuccess(false), 3000);
       } else {
         const error = await response.json();

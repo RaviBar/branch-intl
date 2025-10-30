@@ -40,26 +40,18 @@ const ConversationView = ({ agent }) => {
     if (socket) {
       socket.emit('join-conversation', customerId);
       
-      // [FIX] This listener now correctly updates the state
       const handleNewMessage = (message) => {
         if (message.customer_id === parseInt(customerId)) {
           console.log('New message received:', message);
-          setMessages(prev => [...prev, message]);
+          setMessages(prev => ([...prev, message]));
         }
       };
       
       socket.on('new-message', handleNewMessage);
-      
-      // The dashboard listener is also useful here to catch assignments
       socket.on('conversation-updated', fetchMessages);
     }
     
-    // [FIX] Removed the setInterval polling
-    // const interval = setInterval(fetchMessages, 5000);
-    
     return () => {
-      // [FIX] Removed clearInterval
-      // clearInterval(interval);
       if (socket) {
         socket.emit('leave-conversation', customerId);
         socket.off('new-message');
@@ -68,7 +60,6 @@ const ConversationView = ({ agent }) => {
     };
   }, [socket, customerId]);
 
-  // Effect to scroll to bottom when messages change
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
@@ -95,7 +86,6 @@ const ConversationView = ({ agent }) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          // [FIX] Use messageBody to match backend
           messageBody: newMessage.trim(),
           agentId: agent.id,
         }),
@@ -103,14 +93,9 @@ const ConversationView = ({ agent }) => {
 
       if (response.ok) {
         setNewMessage('');
-        // [FIX] No longer need to manually fetch.
-        // The socket 'new-message' event will update the UI.
-        // await fetchMessages(); 
       } else {
         const errorData = await response.json();
         alert(`Failed to send message: ${errorData.error}`);
-        // [FIX] If it failed (e.g., 409 conflict), refresh state
-        // to show who took the ticket.
         await fetchMessages();
       }
     } catch (err) {
@@ -129,47 +114,47 @@ const ConversationView = ({ agent }) => {
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl"> 
       <div className="mb-6 flex justify-between items-center">
         <div>
           <Link
             to="/dashboard"
-            className="text-indigo-600 hover:text-indigo-500 text-sm font-medium"
+            className="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm font-medium"
           >
             ← Back to Dashboard
           </Link>
-          <h2 className="mt-2 text-2xl font-bold text-gray-900">
+          <h2 className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
             Conversation with Customer #{customerId}
           </h2>
         </div>
         <div className="flex items-center space-x-2">
             <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-gray-600 dark:text-gray-400">
               {isConnected ? 'Connected' : 'Disconnected'}
             </span>
         </div>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
-          <div className="text-red-800">{error}</div>
+        <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6 dark:bg-red-900 dark:border-red-700">
+          <div className="text-red-800 dark:text-red-200">{error}</div>
         </div>
       )}
 
-      <div className="bg-white shadow rounded-lg">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900">Messages</h3>
+      <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white">Messages</h3>
         </div>
         
-        <div className="px-6 py-4 h-96 overflow-y-auto">
+        <div className="px-6 py-4 h-96 overflow-y-auto dark:bg-gray-800">
           {messages.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No messages found</p>
+            <p className="text-gray-500 dark:text-gray-400 text-center py-8">No messages found</p>
           ) : (
             <div className="space-y-4">
               {messages.map((message) => (
@@ -180,14 +165,14 @@ const ConversationView = ({ agent }) => {
                   <div
                     className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
                       message.is_from_customer
-                        ? 'bg-gray-100 text-gray-900'
+                        ? 'bg-gray-100 text-gray-900 dark:bg-gray-700 dark:text-gray-100'
                         : 'bg-indigo-600 text-white'
                     }`}
                   >
                     <p className="text-sm whitespace-pre-wrap">{message.message_body}</p>
                     <p
                       className={`text-xs mt-1 ${
-                        message.is_from_customer ? 'text-gray-500' : 'text-indigo-200'
+                        message.is_from_customer ? 'text-gray-500 dark:text-gray-400' : 'text-indigo-200'
                       }`}
                     >
                       {formatTimestamp(message.timestamp)}
@@ -203,14 +188,14 @@ const ConversationView = ({ agent }) => {
           )}
         </div>
 
-        <div className="px-6 py-4 border-t border-gray-200">
+        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700">
           <form onSubmit={handleSendMessage} className="flex space-x-4">
             <input
               type="text"
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               placeholder="Type your response..."
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               disabled={isSending}
             />
             <button
@@ -228,3 +213,4 @@ const ConversationView = ({ agent }) => {
 };
 
 export default ConversationView;
+

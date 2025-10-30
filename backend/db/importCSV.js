@@ -63,7 +63,6 @@ async function importCSVData() {
 
     console.log('CSV import completed successfully!');
     
-    // Show summary
     const customerCount = await db.get('SELECT COUNT(*) as count FROM customers');
     const messageCount = await db.get('SELECT COUNT(*) as count FROM messages');
     
@@ -79,7 +78,6 @@ async function importCSVData() {
   }
 }
 
-// Run if called directly
 if (require.main === module) {
   importCSVData();
 }

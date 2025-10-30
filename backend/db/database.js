@@ -4,26 +4,17 @@ const path = require('path');
 
 class Database {
   constructor() {
-    this.type = process.env.DB_TYPE || 'sqlite'; // 'sqlite' or 'postgres'
+    this.type = process.env.DB_TYPE || 'sqlite'; 
     this.connection = null;
     this.init();
   }
 
   init() {
-    // User requested to ignore Postgres, so we'll force SQLite
     this.type = 'sqlite';
     this.initSQLite();
-    
-    // Original logic (commented out per your request)
-    // if (this.type === 'postgres') {
-    //   this.initPostgreSQL();
-    // } else {
-    //   this.initSQLite();
-    // }
   }
 
   initPostgreSQL() {
-    // This logic is now skipped
     this.connection = new Pool({
       host: process.env.DB_HOST || 'localhost',
       port: process.env.DB_PORT || 5432,
@@ -32,7 +23,6 @@ class Database {
       password: process.env.DB_PASSWORD || 'password',
     });
 
-    // Test connection
     this.connection.query('SELECT NOW()', (err, res) => {
       if (err) {
         console.error('PostgreSQL connection error:', err);
@@ -62,7 +52,6 @@ class Database {
   }
 
   createPostgreSQLTables() {
-    // This logic is now skipped
     const schema = `
       -- Customers table
       CREATE TABLE IF NOT EXISTS customers (
@@ -111,7 +100,6 @@ class Database {
   }
 
   createSQLiteTables() {
-    // [FIX] This schema is now CORRECT. It includes current_agent_id and urgency_level.
     const schema = `
       -- Customers table
       CREATE TABLE IF NOT EXISTS customers (
@@ -162,9 +150,7 @@ class Database {
     });
   }
 
-  // Query method that works for both databases
   query(sql, params = []) {
-    // Helper to fix PostgreSQL $1, $2 placeholders for SQLite
     const sqliteSql = this.type === 'sqlite' ? sql.replace(/\$\d+/g, '?') : sql;
     
     return new Promise((resolve, reject) => {
@@ -182,9 +168,7 @@ class Database {
     });
   }
 
-  // Get single row
   get(sql, params = []) {
-    // Helper to fix PostgreSQL $1, $2 placeholders for SQLite
     const sqliteSql = this.type === 'sqlite' ? sql.replace(/\$\d+/g, '?') : sql;
 
     return new Promise((resolve, reject) => {
@@ -202,14 +186,11 @@ class Database {
     });
   }
 
-  // Run query (for INSERT, UPDATE, DELETE)
   run(sql, params = []) {
-    // Helper to fix PostgreSQL $1, $2 placeholders for SQLite
     const sqliteSql = this.type === 'sqlite' ? sql.replace(/\$\d+/g, '?') : sql;
 
     return new Promise((resolve, reject) => {
       if (this.type === 'postgres') {
-        // Added RETURNING id to get the lastID for Postgres
         const pgSql = /INSERT/i.test(sql) ? `${sql} RETURNING id` : sql;
         this.connection.query(pgSql, params, (err, result) => {
           if (err) reject(err);

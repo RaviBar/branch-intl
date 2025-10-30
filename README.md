@@ -9,13 +9,13 @@ A customer service messaging web application built with React and Node.js that a
 - **Message Management**: View and respond to customer messages with conversation threading
 - **Customer Simulation**: Built-in message simulator for testing
 - **Modern UI**: Clean, responsive interface built with React and TailwindCSS
-- **Database Integration**: PostgreSQL database with proper schema and CSV import
+- **Database Integration**: SQLITE database with proper schema and CSV import
 
 ## Tech Stack
 
 - **Frontend**: React 18, Vite, TailwindCSS
 - **Backend**: Node.js, Express
-- **Database**: PostgreSQL
+- **Database**: SQLITE
 - **Deployment**: Cloud-ready (Vercel + Railway/Render)
 
 ## Quick Start

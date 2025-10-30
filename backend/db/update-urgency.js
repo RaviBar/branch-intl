@@ -12,7 +12,6 @@ const urgentKeywords = ['loan', 'approval', 'disbursed', 'urgent', 'help',
 db.serialize(() => {
   db.run(`PRAGMA busy_timeout=5000;`);
 
-  // Ensure column exists
   db.all(`PRAGMA table_info(messages);`, (err, cols) => {
     if (err) throw err;
     const hasUrgency = cols.some(c => c.name === 'urgency_level');
