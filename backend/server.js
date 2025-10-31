@@ -2,7 +2,10 @@ const express = require('express');
 const cors = require('cors');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
-const db = require('./db/database');
+//
+// We import db here, which starts the 'initPromise'
+const db = require('./db/database'); 
+//
 require('dotenv').config();
 
 const app = express();
@@ -46,15 +49,16 @@ const handleSimulatedMessage = async (data, callback) => {
       return callback({ success: false, error: 'Customer ID and message body are required' });
     }
 
+    // [FIXED] Use database-aware SQL
     const dbType = process.env.DB_TYPE || 'sqlite';
     let customerSql;
-
     if (dbType === 'postgres') {
       customerSql = 'INSERT INTO customers (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING';
     } else {
       customerSql = 'INSERT OR IGNORE INTO customers (user_id) VALUES (?)';
     }
     await db.run(customerSql, [customerId]);
+    // [END FIX]
 
     const lower = messageBody.toLowerCase();
     const urgentKeywords = [
@@ -67,7 +71,7 @@ const handleSimulatedMessage = async (data, callback) => {
     const urgency = isUrgent ? 'high' : 'normal';
 
     const r = await db.run(
-      `INSERT INTO messages (customer_id, message_body, timestamp, is_from_customer, status, urgency_level, current_agent_id)
+      `INSERT INTO messages (customer_id, message_body, "timestamp", is_from_customer, status, urgency_level, current_agent_id)
        VALUES (?, ?, ?, 1, 'pending', ?, NULL)`,
       [customerId, messageBody, new Date().toISOString(), urgency]
     );
@@ -105,7 +109,6 @@ io.on('connection', (socket) => {
     console.log(`Client left conversation ${customerId}`);
   });
   
-  // [NEW] Handle simulator message via socket
   socket.on('simulate-message', handleSimulatedMessage);
 
   socket.on('disconnect', () => {
@@ -113,12 +116,33 @@ io.on('connection', (socket) => {
   });
 });
 
-// Start server
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`WebSocket server ready`);
-});
+
+// ############# THIS IS THE NEW, FIXED STARTUP LOGIC #############
+
+// Create a new function to start the server
+async function startServer() {
+  try {
+    // 1. Wait for the database.initPromise to resolve
+    console.log('Waiting for database connection...');
+    await db.initPromise; 
+    console.log('Database connection ready.');
+
+    // 2. Once the database is ready, start the server
+    server.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`WebSocket server ready`);
+    });
+
+  } catch (err) {
+    console.error('Failed to connect to database. Server not started.', err);
+    process.exit(1); // Exit the process with an error
+  }
+}
+
+// Call the function to start the server
+startServer();
+
+// ############# END OF FIXED STARTUP LOGIC #############
 
 module.exports = { app, io };
-
