@@ -43,25 +43,31 @@ async function importCSVData(filePath) {
           await db.initPromise; 
 
           for (const row of allRows) {
-            if (row.customer_id) {
-              customers.add(row.customer_id);
+            // #############
+            // ## THE FIX ##
+            // #############
+            if (row.user_id) { // Changed from customer_id
+              customers.add(row.user_id);
               // Insert customer first
-              await db.run(customerSql, [row.customer_id]);
+              await db.run(customerSql, [row.user_id]); // Changed from customer_id
             }
           }
-          console.log(`Found and processed ${customers.size} unique customers.`);
+          console.log(`Found and processed ${customers.size} unique customers.`); // This will now show 55
 
           for (const row of allRows) {
             const lower = row.message_body ? row.message_body.toLowerCase() : '';
             const isUrgent = urgentKeywords.some(k => lower.includes(k));
             const urgency = isUrgent ? 'high' : 'normal';
-
-            if (row.customer_id && row.message_body && row.timestamp && row.status) {
+            
+            // #############
+            // ## THE FIX ##
+            // #############
+            if (row.user_id && row.message_body && row.timestamp && row.status) { // Changed from customer_id
               // Insert the message
               await db.run(messageSql, [
-                row.customer_id, 
+                row.user_id, // Changed from customer_id
                 row.message_body, 
-                new Date(row.timestamp).toISOString(), // Ensure timestamp is in ISO format
+                new Date(row.timestamp).toISOString(), 
                 row.status, 
                 urgency
               ]);
@@ -86,11 +92,10 @@ async function importCSVData(filePath) {
   if (!filePath) {
     console.error('CSV file not found. Please provide the correct path.');
     console.log('Usage: node importCSV.js <path-to-csv-file>');
-    process.exit(1); // Exit with error
+    process.exit(1); 
   }
 
   try {
-    // Wait for the DB to be ready before importing
     await db.initPromise; 
     console.log('Database connection ready.');
     
@@ -99,8 +104,8 @@ async function importCSVData(filePath) {
     console.log('CSV Import completed successfully.');
   } catch (err) {
     console.error('Error during import process:', err);
-    process.exit(1); // Exit with error
+    process.exit(1); 
   } finally {
-    if (db) db.close(); // Always close the connection
+    if (db) db.close(); 
   }
 })();
