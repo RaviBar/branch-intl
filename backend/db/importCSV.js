@@ -41,8 +41,21 @@ async function importCSVData() {
 
     // Insert customers
     console.log(`Found ${customers.size} unique customers`);
-    for (const userId of customers) {
-      await db.run('INSERT OR IGNORE INTO customers (user_id) VALUES (?)', [userId]);
+              
+    // Check which database we are using
+    const dbType = process.env.DB_TYPE || 'sqlite';
+    let customerSql;
+
+    if (dbType === 'postgres') {
+      customerSql = 'INSERT INTO customers (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING';
+    } else {
+      customerSql = 'INSERT OR IGNORE INTO customers (user_id) VALUES (?)';
+    }
+
+    for (const customerId of customers) {
+      if (customerId) {
+        await db.run(customerSql, [customerId]);
+      }
     }
 
     // Insert messages

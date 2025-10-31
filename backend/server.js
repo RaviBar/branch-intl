@@ -46,7 +46,15 @@ const handleSimulatedMessage = async (data, callback) => {
       return callback({ success: false, error: 'Customer ID and message body are required' });
     }
 
-    await db.run('INSERT OR IGNORE INTO customers (user_id) VALUES (?)', [customerId]);
+    const dbType = process.env.DB_TYPE || 'sqlite';
+    let customerSql;
+
+    if (dbType === 'postgres') {
+      customerSql = 'INSERT INTO customers (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING';
+    } else {
+      customerSql = 'INSERT OR IGNORE INTO customers (user_id) VALUES (?)';
+    }
+    await db.run(customerSql, [customerId]);
 
     const lower = messageBody.toLowerCase();
     const urgentKeywords = [
