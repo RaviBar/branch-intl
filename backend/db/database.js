@@ -1,3 +1,4 @@
+// backend/db/database.js
 const sqlite3 = require('sqlite3').verbose();
 const { Pool } = require('pg');
 const path = require('path');
@@ -48,6 +49,8 @@ class Database {
       console.log('Database table check/creation complete.');
     } catch (err) {
       console.error('Error during database initialization:', err);
+      // ## THIS IS THE FIX: Re-throw the error to stop the initPromise ##
+      throw err; 
     }
   }
 
@@ -95,10 +98,11 @@ class Database {
 
   createPostgreSQLTables() {
     // Note: "timestamp" is a keyword, so it's safer to quote it.
+    // ## THIS IS THE FIX: Corrected the typo ##
     const schema = `
       CREATE TABLE IF NOT EXISTS customers ( user_id INTEGER PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT NOW() );
       CREATE TABLE IF NOT EXISTS agents ( id SERIAL PRIMARY KEY, name TEXT NOT NULL, is_online BOOLEAN DEFAULT false, created_at TIMESTAMPTZ DEFAULT NOW() );
-      CREATE TABLE IF NOT EXISTS messages ( id SERIAL PRIMARY KEY, customer_id INTEGER NOT NULL, message_body TEXT NOT NULL, "timestamp" TIMESTAMPTZ NOT NULL, is_from_customer BOOLEAN NOT NULL DEFAULT true, agent_id INTEGER, current_agent_id INTEGER, urgency_level TEXT DEFAULT 'normal' CHECK (urgency_level IN ('normal','high')), status TEXT DEFAULT 'pending' CHECK (status IN ('pending','assigned','responded')), created_at TIMESTAMT_CONFIG_OPTION_POSTGRESQL_V12_COMPATIBLEZ DEFAULT NOW(), FOREIGN KEY (customer_id) REFERENCES customers(user_id), FOREIGN KEY (agent_id) REFERENCES agents(id), FOREIGN KEY (current_agent_id) REFERENCES agents(id) );
+      CREATE TABLE IF NOT EXISTS messages ( id SERIAL PRIMARY KEY, customer_id INTEGER NOT NULL, message_body TEXT NOT NULL, "timestamp" TIMESTAMPTZ NOT NULL, is_from_customer BOOLEAN NOT NULL DEFAULT true, agent_id INTEGER, current_agent_id INTEGER, urgency_level TEXT DEFAULT 'normal' CHECK (urgency_level IN ('normal','high')), status TEXT DEFAULT 'pending' CHECK (status IN ('pending','assigned','responded')), created_at TIMESTAMPTZ DEFAULT NOW(), FOREIGN KEY (customer_id) REFERENCES customers(user_id), FOREIGN KEY (agent_id) REFERENCES agents(id), FOREIGN KEY (current_agent_id) REFERENCES agents(id) );
       CREATE INDEX IF NOT EXISTS idx_messages_customer_id ON messages(customer_id);
       CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages("timestamp");
       CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status);
