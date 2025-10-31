@@ -6,7 +6,6 @@ async function importCSVData(filePath) {
   console.log('Starting CSV import...');
   const customers = new Set();
 
-  // Determine DB type for correct SQL syntax
   const dbType = process.env.DB_TYPE || 'sqlite';
   let customerSql;
   let messageSql;
@@ -30,7 +29,6 @@ async function importCSVData(filePath) {
 
   const allRows = [];
   
-  // New Promise-based approach to read stream first
   return new Promise((resolve, reject) => {
     fs.createReadStream(filePath)
       .pipe(csv())
@@ -39,7 +37,6 @@ async function importCSVData(filePath) {
         console.log(`CSV file read. ${allRows.length} rows to process.`);
         
         try {
-          // Ensure DB is initialized
           await db.initPromise; 
 
           for (const row of allRows) {
@@ -48,11 +45,11 @@ async function importCSVData(filePath) {
             // #############
             if (row.user_id) { // Changed from customer_id
               customers.add(row.user_id);
-              // Insert customer first
               await db.run(customerSql, [row.user_id]); // Changed from customer_id
             }
           }
-          console.log(`Found and processed ${customers.size} unique customers.`); // This will now show 55
+          // This log will now show the correct number
+          console.log(`Found and processed ${customers.size} unique customers.`); 
 
           for (const row of allRows) {
             const lower = row.message_body ? row.message_body.toLowerCase() : '';
@@ -63,7 +60,6 @@ async function importCSVData(filePath) {
             // ## THE FIX ##
             // #############
             if (row.user_id && row.message_body && row.timestamp && row.status) { // Changed from customer_id
-              // Insert the message
               await db.run(messageSql, [
                 row.user_id, // Changed from customer_id
                 row.message_body, 
@@ -74,9 +70,9 @@ async function importCSVData(filePath) {
             }
           }
           console.log('All messages imported.');
-          resolve(); // Resolve the promise when all DB operations are done
+          resolve(); 
         } catch (err) {
-          reject(err); // Reject if any DB operation fails
+          reject(err); 
         }
       })
       .on('error', (err) => {
@@ -102,10 +98,13 @@ async function importCSVData(filePath) {
     await importCSVData(filePath);
     
     console.log('CSV Import completed successfully.');
+    //
+    // ## THE SECOND FIX ##
+    // We NO LONGER call db.close() here, so the server can start.
+    //
   } catch (err) {
     console.error('Error during import process:', err);
     process.exit(1); 
-  } finally {
-    if (db) db.close(); 
   }
+  // We also do not call db.close() in a 'finally' block
 })();
