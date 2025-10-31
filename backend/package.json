@@ -7,7 +7,7 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "init-db": "node db/init.js",
-    "import": "node db/importCSV.js",
+    "import": "node db/importCSV.js ../GeneralistRails_Project_MessageData.csv",
     "reset-db": "node db/reset.js"
   },
   "dependencies": {
