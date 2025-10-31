@@ -7,7 +7,7 @@ class Database {
   constructor() {
     this.type = process.env.DB_TYPE || 'sqlite';
     this.connection = null;
-    // Call init, but don't await it here.
+    // Call init, and store the promise
     this.initPromise = this.init();
   }
 
@@ -21,7 +21,7 @@ class Database {
 
   async initPostgreSQL() {
     const connectionConfig = {};
-
+    
     if (process.env.DATABASE_URL) {
       connectionConfig.connectionString = process.env.DATABASE_URL;
       if (process.env.NODE_ENV === 'production') {
@@ -41,10 +41,9 @@ class Database {
       console.error('Unexpected error on idle client', err);
       process.exit(-1);
     });
-
+    
     try {
       console.log('PostgreSQL pool created. Attempting to create tables...');
-      // Use the pool to run the query, it will manage the client
       await this.createTables(); 
       console.log('Database table check/creation complete.');
     } catch (err) {
@@ -72,7 +71,7 @@ class Database {
           console.error('Error opening SQLite database:', err);
           return reject(err);
         }
-
+        
         console.log('SQLite connected successfully');
         try {
           await this.createTables();
@@ -95,10 +94,11 @@ class Database {
   }
 
   createPostgreSQLTables() {
+    // Note: "timestamp" is a keyword, so it's safer to quote it.
     const schema = `
       CREATE TABLE IF NOT EXISTS customers ( user_id INTEGER PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT NOW() );
       CREATE TABLE IF NOT EXISTS agents ( id SERIAL PRIMARY KEY, name TEXT NOT NULL, is_online BOOLEAN DEFAULT false, created_at TIMESTAMPTZ DEFAULT NOW() );
-      CREATE TABLE IF NOT EXISTS messages ( id SERIAL PRIMARY KEY, customer_id INTEGER NOT NULL, message_body TEXT NOT NULL, "timestamp" TIMESTAMPTZ NOT NULL, is_from_customer BOOLEAN NOT NULL DEFAULT true, agent_id INTEGER, current_agent_id INTEGER, urgency_level TEXT DEFAULT 'normal' CHECK (urgency_level IN ('normal','high')), status TEXT DEFAULT 'pending' CHECK (status IN ('pending','assigned','responded')), created_at TIMESTAMPTZ DEFAULT NOW(), FOREIGN KEY (customer_id) REFERENCES customers(user_id), FOREIGN KEY (agent_id) REFERENCES agents(id), FOREIGN KEY (current_agent_id) REFERENCES agents(id) );
+      CREATE TABLE IF NOT EXISTS messages ( id SERIAL PRIMARY KEY, customer_id INTEGER NOT NULL, message_body TEXT NOT NULL, "timestamp" TIMESTAMPTZ NOT NULL, is_from_customer BOOLEAN NOT NULL DEFAULT true, agent_id INTEGER, current_agent_id INTEGER, urgency_level TEXT DEFAULT 'normal' CHECK (urgency_level IN ('normal','high')), status TEXT DEFAULT 'pending' CHECK (status IN ('pending','assigned','responded')), created_at TIMESTAMT_CONFIG_OPTION_POSTGRESQL_V12_COMPATIBLEZ DEFAULT NOW(), FOREIGN KEY (customer_id) REFERENCES customers(user_id), FOREIGN KEY (agent_id) REFERENCES agents(id), FOREIGN KEY (current_agent_id) REFERENCES agents(id) );
       CREATE INDEX IF NOT EXISTS idx_messages_customer_id ON messages(customer_id);
       CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages("timestamp");
       CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status);
@@ -174,19 +174,32 @@ class Database {
     }
   }
 
+  // ############# THIS IS THE FIXED FUNCTION #############
   async run(sql, params = []) {
     await this.initPromise; // Ensure init is finished
     if (this.type === 'postgres') {
       let pgSql = this.sqlToPg(sql);
+      
+      // NEW LOGIC: Check which table and add the correct RETURNING column
       if (pgSql.trim().toUpperCase().startsWith('INSERT') && !pgSql.includes('RETURNING')) {
-        pgSql = pgSql + ' RETURNING id';
+        if (pgSql.includes('INTO customers')) {
+          pgSql = pgSql + ' RETURNING user_id';
+        } else {
+          pgSql = pgSql + ' RETURNING id';
+        }
       }
+      
       return this.connection.query(pgSql, params)
-        .then(res => ({
-          lastID: res.rows[0] ? res.rows[0].id : null,
-          changes: res.rowCount,
-        }));
+        .then(res => {
+          let lastID = null;
+          // NEW LOGIC: Check if rows exist, then check for either id or user_id
+          if (res.rows && res.rows[0]) {
+              lastID = res.rows[0].id || res.rows[0].user_id;
+          }
+          return { lastID: lastID, changes: res.rowCount };
+        });
     } else {
+      // Original SQLite code
       return new Promise((resolve, reject) => {
         this.connection.run(sql, params, function(err) {
           if (err) reject(err);
@@ -195,6 +208,7 @@ class Database {
       });
     }
   }
+  // ############# END OF FIXED FUNCTION #############
 
   close() {
     if (this.connection) {
