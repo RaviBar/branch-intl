@@ -1,3 +1,4 @@
+// backend/db/importCSV.js
 const fs = require('fs');
 const csv = require('csv-parser');
 const db = require('./database');
@@ -13,11 +14,13 @@ async function importCSVData(filePath) {
   if (dbType === 'postgres') {
     console.log('Detected Postgres, using ON CONFLICT.');
     customerSql = 'INSERT INTO customers (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING';
-    messageSql = 'INSERT INTO messages (customer_id, message_body, "timestamp", is_from_customer, status, urgency_level) VALUES ($1, $2, $3, 1, $4, $5) ON CONFLICT DO NOTHING';
+    // ## FIX: Removed 'status' from the INSERT, changed params from 5 to 4 ##
+    messageSql = 'INSERT INTO messages (customer_id, message_body, "timestamp", is_from_customer, urgency_level) VALUES ($1, $2, $3, 1, $4) ON CONFLICT DO NOTHING';
   } else {
     console.log('Detected SQLite, using INSERT OR IGNORE.');
     customerSql = 'INSERT OR IGNORE INTO customers (user_id) VALUES (?)';
-    messageSql = 'INSERT OR IGNORE INTO messages (customer_id, message_body, "timestamp", is_from_customer, status, urgency_level) VALUES (?, ?, ?, 1, ?, ?)';
+    // ## FIX: Removed 'status' from the INSERT ##
+    messageSql = 'INSERT OR IGNORE INTO messages (customer_id, message_body, "timestamp", is_from_customer, urgency_level) VALUES (?, ?, ?, 1, ?)';
   }
   
   const urgentKeywords = [
@@ -41,31 +44,32 @@ async function importCSVData(filePath) {
 
           for (const row of allRows) {
             // #############
-            // ## THE FIX ##
+            // ## THE FIX: Use correct header 'User ID' ##
             // #############
-            if (row.user_id) { // Changed from customer_id
-              customers.add(row.user_id);
-              await db.run(customerSql, [row.user_id]); // Changed from customer_id
+            if (row['User ID']) { 
+              customers.add(row['User ID']);
+              await db.run(customerSql, [row['User ID']]);
             }
           }
-          // This log will now show the correct number
           console.log(`Found and processed ${customers.size} unique customers.`); 
 
           for (const row of allRows) {
-            const lower = row.message_body ? row.message_body.toLowerCase() : '';
+            // #############
+            // ## THE FIX: Use correct headers 'Message Body' and 'Timestamp (UTC)' ##
+            // #############
+            const lower = row['Message Body'] ? row['Message Body'].toLowerCase() : '';
             const isUrgent = urgentKeywords.some(k => lower.includes(k));
             const urgency = isUrgent ? 'high' : 'normal';
             
             // #############
-            // ## THE FIX ##
+            // ## THE FIX: Check for correct headers and remove 'row.status' ##
             // #############
-            if (row.user_id && row.message_body && row.timestamp && row.status) { // Changed from customer_id
+            if (row['User ID'] && row['Message Body'] && row['Timestamp (UTC)']) { 
               await db.run(messageSql, [
-                row.user_id, // Changed from customer_id
-                row.message_body, 
-                new Date(row.timestamp).toISOString(), 
-                row.status, 
-                urgency
+                row['User ID'], 
+                row['Message Body'], 
+                new Date(row['Timestamp (UTC)']).toISOString(), 
+                urgency // 'row.status' removed
               ]);
             }
           }
@@ -98,13 +102,9 @@ async function importCSVData(filePath) {
     await importCSVData(filePath);
     
     console.log('CSV Import completed successfully.');
-    //
-    // ## THE SECOND FIX ##
-    // We NO LONGER call db.close() here, so the server can start.
-    //
+    // We intentionally do not call db.close() so the process can continue
   } catch (err) {
     console.error('Error during import process:', err);
     process.exit(1); 
   }
-  // We also do not call db.close() in a 'finally' block
 })();
